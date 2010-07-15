@@ -1,0 +1,84 @@
+#!/bin/sh
+
+# Git update hook for CL-CI
+# =========================
+
+# Config
+# ------
+# hooks.allowunannotated
+#   This boolean sets whether unannotated tags will be allowed into the
+#   repository.  By default they won't be.
+# hooks.allowdeletetag
+#   This boolean sets whether deleting tags will be allowed in the
+#   repository.  By default they won't be.
+# hooks.allowmodifytag
+#   This boolean sets whether a tag may be modified after creation. By default
+#   it won't be.
+# hooks.allowdeletebranch
+#   This boolean sets whether deleting branches will be allowed in the
+#   repository.  By default they won't be.
+# hooks.denycreatebranch
+#   This boolean sets whether remotely creating branches will be denied
+#   in the repository.  By default this is allowed.
+#
+
+# --- Command line
+refname="$1"
+oldrev="$2"
+newrev="$3"
+
+# --- Safety check
+case "$GIT_DIR" in
+    /*)
+	;;
+    "")
+	echo "Don't run this script from the command line." >&2
+	echo " (if you want, you could supply GIT_DIR then run" >&2
+	echo "  $0 <ref> <oldrev> <newrev>)" >&2
+	exit 1
+	;;
+    *)
+	echo "GIT_DIR should be an absolute path." >&2
+	export GIT_DIR="$PWD/$GIT_DIR"
+	;;
+esac
+
+if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then
+	echo "Usage: $0 <ref> <oldrev> <newrev>" >&2
+	exit 1
+fi
+
+# Config
+
+read_config() {
+    GROUP=$1; NAME=$2; shift 2
+    VALUE=$(git config --get $GROUP.$NAME $@)
+    if [ -z "$VALUE" ]; then
+	echo "Missing config $GROUP.$NAME" >&2
+	exit 1
+    fi
+    export $NAME="$VALUE"
+}
+
+read_config core bare
+read_config cl-ci repository
+read_config cl-ci url
+read_config cl-ci key
+
+if [ "$bare" = "true" ]; then
+    repo_dir="$GIT_DIR"
+else
+    # remove /.git
+    repo_dir="$(echo "$GIT_DIR" | sed -E 's,/\.git/?,/,')"
+fi
+# ensure trailing slash
+repo_dir="$(echo "$repo_dir" | sed -E 's,([^/]$),\1/,')"
+
+# Request
+curl --basic -L --show-error -s -u "$repository":"$key" \
+    --data "repository=$repository" \
+    --data "repo-type=git" \
+    --data "repo-dir=$repo_dir" \
+    --data "old-rev=$oldrev" \
+    --data "new-rev=$newrev" \
+    "http://localhost:9081/hook/update"

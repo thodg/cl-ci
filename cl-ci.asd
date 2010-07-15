@@ -27,7 +27,7 @@
 (defpackage :cl-ci.system
   (:use :cl :asdf))
 
-(in-package :cl-ci)
+(in-package :cl-ci.system)
 
 (defsystem :cl-ci
   :name "cl-ci"
@@ -35,10 +35,10 @@
   :version "0.1"
   :description "Continuous integration server in Common Lisp"
   :depends-on ("cl-log"
-               "ele-bdb"
 	       "html-template"
                "hunchentoot")
   :components
   ((:file "defpackage")
    (:file "http" :depends-on ("specials"))
+   (:file "repository" :depends-on ("defpackage"))
    (:file "specials" :depends-on ("defpackage"))))

@@ -40,18 +40,49 @@
 	   :parts parts)
      :stream stream)))
 
-(setf hunchentoot:*dispatch-table*
-      '(hunchentoot:dispatch-easy-handlers
-	(hunchentoot:create-folder-dispatcher-and-handler
-	 "/css/"
-	 #P"files/css/"
-	 "text/css")
-	hunchentoot:default-dispatcher))
+(defun create-files-dispatchers (&rest items)
+  (mapcar #'(lambda (item)
+	      (let ((dir (first item))
+		    (type (second item)))
+		(hunchentoot:create-folder-dispatcher-and-handler
+		 (format nil "/~A/" dir)
+		 (make-pathname :directory (list "files" dir))
+		 type)))
+	  items))
 
 (hunchentoot:define-easy-handler (home :uri "/") ()
   (render-parts "Home" `(#P"home.xhtml" ())))
 
+(defmacro define-hook (name parameters &body body)
+  `(hunchentoot:define-easy-handler (,(intern (format nil "DISPATCH-~A" name))
+				      :uri ,(format nil "/hook/~A"
+						    (string-downcase name)))
+       ,parameters
+     ,@body))
+
+(define-hook update (repository old-rev new-rev repo-type repo-dir)
+  (check-type repository string)
+  (check-type old-rev string)
+  (check-type new-rev string)
+  (check-type repo-type string)
+  (check-type repo-dir string)
+  (hunchentoot:log-message :debug "Repository ~S updated to revision ~S"
+			   repository new-rev)
+  (format nil "
+Checking update of repository ~S
+  From rev ~S
+  To   rev ~S
+  Repo type ~A
+  Repo dir ~A
+"
+	  repository old-rev new-rev repo-type repo-dir))
+
+(setf hunchentoot:*dispatch-table*
+      `(hunchentoot:dispatch-easy-handlers
+	,@(create-files-dispatchers '("css" "text/css")
+				    '("img" "image/png")
+				    '("js"  "text/javascript"))))
+
+
 (setf hunchentoot:*access-log-pathname* #P"log/access.log")
 (setf hunchentoot:*message-log-pathname* #P"log/message.log")
-
-(hunchentoot:start (make-instance 'hunchentoot:acceptor :port 9081))
