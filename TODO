@@ -1,0 +1,17 @@
+TODO for CL-CI
+
+* Core functions
+
+   - Commit hooks
+      - Auth'ed POST to http://cl-ci/hooks/commit/?project=my-project
+
+   - Specific repository actions definitions
+      - On commit
+      - Run tests
+
+   - Message reporting
+      - Mail
+      - Text log
+      - Website
+
+* Publish on Github
