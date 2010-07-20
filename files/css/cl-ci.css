@@ -4,3 +4,9 @@ h1,h2,h3,h4 {
 a {
     text-decoration:none;
 }
+.files table {
+    text-align:left;
+}
+.files td, .files th {
+    padding-right:2em;
+}

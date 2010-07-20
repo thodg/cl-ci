@@ -27,3 +27,5 @@
 (in-package :cl-ci)
 
 (defvar *domain* "localhost")
+(defvar *auth-file* #P"auth.sexp")
+(defvar *temporary-directory* #P"tmp/")

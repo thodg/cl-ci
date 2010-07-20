@@ -75,8 +75,9 @@ fi
 repo_dir="$(echo "$repo_dir" | sed -E 's,([^/]$),\1/,')"
 
 # Request
-curl --basic -L --show-error -s -u "$repository":"$key" \
+curl -L --show-error -s \
     --data "repository=$repository" \
+    --data "key=$key" \
     --data "repo-type=git" \
     --data "repo-dir=$repo_dir" \
     --data "old-rev=$oldrev" \

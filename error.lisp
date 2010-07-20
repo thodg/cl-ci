@@ -24,29 +24,11 @@
 ;;  DEALINGS IN THE SOFTWARE.
 ;;
 
-(defpackage :cl-ci.system
-  (:use :cl :asdf))
+(in-package :cl-ci)
 
-(in-package :cl-ci.system)
+(defun return-http (code &optional (message (hunchentoot:reason-phrase code)))
+  (setf (hunchentoot:return-code*) code)
+  (hunchentoot:abort-request-handler (format nil "CL-CI: ~A~%" message)))
 
-(defsystem :cl-ci
-  :name "cl-ci"
-  :author "Thomas de Grivel <billitch@gmail.com>"
-  :version "0.1"
-  :description "Continuous integration server in Common Lisp"
-  :depends-on ("cl-smtp"
-	       "html-template"
-               "hunchentoot"
-               "hunchentoot-dir-lister"
-	       "trivial-backtrace"
-	       "trivial-shell")
-  :components
-  ((:file "auth" :depends-on ("error" "specials"))
-   (:file "defpackage")
-   (:file "error" :depends-on ("defpackage"))
-   (:file "git" :depends-on ("repository"))
-   (:file "http" :depends-on ("auth"))
-   (:file "posix" :depends-on ("defpackage"))
-   (:file "report" :depends-on ("http" "repository"))
-   (:file "repository" :depends-on ("posix"))
-   (:file "specials" :depends-on ("defpackage"))))
+(defun http-error-handler (request)
+  (setf (hunchentoot:content-type*) "text/plain"))

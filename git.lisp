@@ -24,29 +24,20 @@
 ;;  DEALINGS IN THE SOFTWARE.
 ;;
 
-(defpackage :cl-ci.system
-  (:use :cl :asdf))
+(in-package :cl-ci)
 
-(in-package :cl-ci.system)
+(defclass git-repository (repository)
+  ())
 
-(defsystem :cl-ci
-  :name "cl-ci"
-  :author "Thomas de Grivel <billitch@gmail.com>"
-  :version "0.1"
-  :description "Continuous integration server in Common Lisp"
-  :depends-on ("cl-smtp"
-	       "html-template"
-               "hunchentoot"
-               "hunchentoot-dir-lister"
-	       "trivial-backtrace"
-	       "trivial-shell")
-  :components
-  ((:file "auth" :depends-on ("error" "specials"))
-   (:file "defpackage")
-   (:file "error" :depends-on ("defpackage"))
-   (:file "git" :depends-on ("repository"))
-   (:file "http" :depends-on ("auth"))
-   (:file "posix" :depends-on ("defpackage"))
-   (:file "report" :depends-on ("http" "repository"))
-   (:file "repository" :depends-on ("posix"))
-   (:file "specials" :depends-on ("defpackage"))))
+(setf (gethash "git" *repository-types*) 'git-repository)
+
+(defmethod repository.export ((repository git-repository)
+			      (target-dir pathname)
+			      &optional revision)
+  (unless revision
+    (setf revision "HEAD"))
+  (with-slots (dir) repository
+    (sh "git archive --remote ~A ~A | tar x -C ~A"
+	(sh-quote dir)
+	(sh-quote revision)
+	(sh-quote target-dir))))
