@@ -28,4 +28,5 @@
 
 (defvar *domain* "localhost")
 (defvar *auth-file* #P"auth.sexp")
+(defvar *notify-file* #P"notify.sexp")
 (defvar *temporary-directory* #P"tmp/")

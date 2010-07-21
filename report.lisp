@@ -33,30 +33,48 @@
        ,parameters
      ,@body))
 
-(defun make-report (repo-name revision)
-  (ensure-directories-exist (format nil "files/reports/~A/" repo-name))
-  (loop
-     for try from 1
-     for uri = (format nil "/reports/~A/~A.~3,'0d.txt"
-		       repo-name revision try)
-     for filename = (format nil "files~A" uri)
-     for stream = (open filename
-			:direction :output
-			:if-exists nil
-			:if-does-not-exist :create)
-     if stream return (values stream filename uri try)))
+(defclass report ()
+  ((event :type string :initarg :event)
+   (repository :type repository :initarg :repository)
+   (revision :type string :initarg :revision)
+   (try :type integer)
+   (uri :type string)
+   (path :type pathname)
+   (stream :type stream)))
 
-(defmacro with-report ((var repo-name revision) &body body)
-  (let ((stream (gensym "STREAM-"))
-	(filename (gensym "FILENAME-"))
-	(uri (gensym "URI-")))
-    `(multiple-value-bind (,stream ,filename ,uri) (make-report ,repo-name
-								,revision)
-       (values (unwind-protect (let ((,var ,stream))
-				 ,@body)
-		 (close ,stream))
-	       ,filename
-	       ,uri))))
+(defun make-report (event repository revision)
+  (let ((repo-name (slot-value repository 'name))
+	(report (make-instance 'report
+			       :event event
+			       :repository repository
+			       :revision revision)))
+    (ensure-directories-exist (format nil "files/reports/~A/" repo-name))
+    (loop
+       for try% from 1
+       for uri% = (format nil "/reports/~A/~A.~3,'0d.txt"
+			  repo-name revision try%)
+       for path% = (format nil "files~A" uri%)
+       for stream% = (open path%
+			   :direction :output
+			   :if-exists nil
+			   :if-does-not-exist :create)
+       until stream%
+       finally (with-slots (try uri path stream) report
+		 (setf try try%
+		       uri uri%
+		       path path%
+		       stream stream%)))
+    report))
+
+(defmacro with-report (stream-var (event repository revision) &body body)
+  (let ((report (gensym "REPORT-"))
+	(stream (gensym "STREAM-")))
+    `(let* ((,report (make-report ,event ,repository ,revision))
+	    (,stream (slot-value ,report 'stream)))
+       (unwind-protect (let ((,stream-var ,stream))
+			 ,@body
+			 ,report)
+	 (close ,stream)))))
 
 (define-hook update (repository key old-rev new-rev repo-type repo-dir)
   (check-type repository string)
@@ -66,13 +84,11 @@
   (check-type repo-type string)
   (check-type repo-dir string)
   (auth-check repository key :kind :repository)
-  (let ((repo (make-repository repo-type repository repo-dir))
-	(success nil)
-	(report-filename nil)
-	(report-uri nil))
-    (multiple-value-setq (success report-filename report-uri)
-      (with-report (report repository new-rev)
-	(format report "
+  (let* ((repo (make-repository repo-type repository repo-dir))
+	 (success nil)
+	 (report
+	  (with-report report (:update repo new-rev)
+	    (format report "
 Checking update of repository ~S
   From revision ~S
   To   revision ~S
@@ -80,12 +96,12 @@ Checking update of repository ~S
   Repo dir ~A
 
 "
-		repository old-rev new-rev repo-type repo-dir)
-	(setf success (repository.run-tests repo
-					    :revision new-rev
-					    :log-stream report))
-	(format report "~%~%Success : ~A~%" success)))
-    (hunchentoot:redirect report-uri)))
+		    repository old-rev new-rev repo-type repo-dir)
+	    (setf success (repository.run-tests repo
+						:revision new-rev
+						:log-stream report))
+	    (format report "~%~%Success : ~A~%" success))))
+    (hunchentoot:redirect (slot-value report 'uri))))
 
 (defmacro define-file-reader (name (file-var file-default) &body body)
   (let ((cache (gensym "CACHE-"))
@@ -107,5 +123,23 @@ Checking update of repository ~S
       (loop
 	 for exp = (read stream nil :eof)
 	 while (not (eq :eof exp))
-	 do (destructuring-bind (login pass &rest plist) exp
-	      (setf (gethash (cons login pass) auth) plist))))))
+	 do (destructuring-bind (events &rest actions) exp
+	      (dolist (event events)
+		(dolist (action actions)
+		  (pushnew action (getf notify event)
+			   :test #'tree-equal))))))
+    notify))
+
+(defun notify-email (report-url to)
+  (cl-smtp:send-email *smtp-host* *mail-from* to 
+
+(defun notify-unknown (report-url &rest args)
+  (declare (ignore args)))
+
+(defun notify-event (event report-url)
+  (dolist (action (getf (read-notify) event))
+    (apply (case (first action)
+	     ('email 'notify-email)
+	     (otherwise 'notify-unknown))
+	   report-url
+	   (rest action))))
