@@ -36,8 +36,8 @@
 			      &optional revision)
   (unless revision
     (setf revision "HEAD"))
-  (with-slots (dir) repository
+  (with-slots (url) repository
     (sh "git archive --remote ~A ~A | tar x -C ~A"
-	(sh-quote dir)
+	(sh-quote url)
 	(sh-quote revision)
 	(sh-quote target-dir))))

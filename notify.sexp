@@ -2,4 +2,4 @@
 ;;
 ;;  Notification settings for CL-CI.
 ;;
-((:success :failure) (:email "billitch@lowh.net"))
+((t) (:email "billitch@lowh.net"))

@@ -41,11 +41,11 @@
 	       "trivial-backtrace"
 	       "trivial-shell")
   :components
-  ((:file "auth" :depends-on ("error" "specials"))
+  ((:file "config" :depends-on ("error" "specials"))
    (:file "defpackage")
    (:file "error" :depends-on ("defpackage"))
    (:file "git" :depends-on ("repository"))
-   (:file "http" :depends-on ("auth"))
+   (:file "http" :depends-on ("config"))
    (:file "posix" :depends-on ("defpackage"))
    (:file "report" :depends-on ("http" "repository"))
    (:file "repository" :depends-on ("posix"))

@@ -40,7 +40,8 @@
    (try :type integer)
    (uri :type string)
    (path :type pathname)
-   (stream :type stream)))
+   (stream :type stream)
+   (result :initform nil)))
 
 (defun make-report (event repository revision)
   (let ((repo-name (slot-value repository 'name))
@@ -68,13 +69,31 @@
 
 (defmacro with-report (stream-var (event repository revision) &body body)
   (let ((report (gensym "REPORT-"))
-	(stream (gensym "STREAM-")))
+	(stream (gensym "STREAM-"))
+	(result (gensym "RESULT-")))
     `(let* ((,report (make-report ,event ,repository ,revision))
 	    (,stream (slot-value ,report 'stream)))
-       (unwind-protect (let ((,stream-var ,stream))
-			 ,@body
+       (unwind-protect (let* ((,stream-var ,stream)
+			      (,result (progn ,@body)))
+			 (format ,stream "~&~%Result : ~S~%" ,result)
+			 (setf (slot-value ,report 'result) ,result)
 			 ,report)
 	 (close ,stream)))))
+
+(defun notify (report)
+  (with-slots (event) report
+    (flet ((notify-action (action)
+	     (apply (case (first action)
+		      (:email 'notify-email)
+		      (otherwise (hunchentoot:log-message
+				  :info "Unknown notify action : ~S"
+				  action)
+				 'notify-unknown))
+		    report
+		    (rest action))))
+      (let ((conf (read-notify)))
+	(mapcar #'notify-action (getf conf event))
+	(mapcar #'notify-action (getf conf t))))))
 
 (define-hook update (repository key old-rev new-rev repo-type repo-dir)
   (check-type repository string)
@@ -85,7 +104,6 @@
   (check-type repo-dir string)
   (auth-check repository key :kind :repository)
   (let* ((repo (make-repository repo-type repository repo-dir))
-	 (success nil)
 	 (report
 	  (with-report report (:update repo new-rev)
 	    (format report "
@@ -97,49 +115,31 @@ Checking update of repository ~S
 
 "
 		    repository old-rev new-rev repo-type repo-dir)
-	    (setf success (repository.run-tests repo
-						:revision new-rev
-						:log-stream report))
-	    (format report "~%~%Success : ~A~%" success))))
+	    (repository.run-tests repo
+				  :revision new-rev
+				  :log-stream report))))
+    (notify report)
     (hunchentoot:redirect (slot-value report 'uri))))
 
-(defmacro define-file-reader (name (file-var file-default) &body body)
-  (let ((cache (gensym "CACHE-"))
-	(cache-time (gensym "CACHE-TIME-"))
-	(wtime (gensym "WTIME")))
-    `(let ((,cache nil)
-	   (,cache-time 0))
-       (defun ,name (&optional (,file-var ,file-default))
-	 (let ((,wtime (file-write-date ,file-var)))
-	   (if (< ,wtime ,cache-time)
-	       ,cache
-	       (setf ,cache-time ,wtime
-		     ,cache (let ((*read-eval* nil))
-			      ,@body))))))))
+(defun report-title (report)
+  (with-slots (event repository revision try) report
+    (with-slots (name) repository
+      (format nil "~A of ~A to revision ~A (try ~3,'0d)"
+	      (string-capitalize (symbol-name event))
+	      name revision try))))
 
-(define-file-reader read-notify (path *notify-file*)
-  (let (notify)
+(defun report-text (report)
+  (with-slots (path) report
     (with-open-file (stream path)
-      (loop
-	 for exp = (read stream nil :eof)
-	 while (not (eq :eof exp))
-	 do (destructuring-bind (events &rest actions) exp
-	      (dolist (event events)
-		(dolist (action actions)
-		  (pushnew action (getf notify event)
-			   :test #'tree-equal))))))
-    notify))
+      (let ((string (make-string (file-length stream))))
+	(read-sequence string stream)
+	string))))
 
-(defun notify-email (report-url to)
-  (cl-smtp:send-email *smtp-host* *mail-from* to 
+(defun notify-email (report to)
+  (hunchentoot:log-message :info "Sending mail to ~S" to)
+  (cl-smtp:send-email *smtp-host* *mail-from* to
+		      (report-title report)
+		      (report-text report)))
 
-(defun notify-unknown (report-url &rest args)
-  (declare (ignore args)))
-
-(defun notify-event (event report-url)
-  (dolist (action (getf (read-notify) event))
-    (apply (case (first action)
-	     ('email 'notify-email)
-	     (otherwise 'notify-unknown))
-	   report-url
-	   (rest action))))
+(defun notify-unknown (report &rest args)
+  (declare (ignore report args)))

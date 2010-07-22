@@ -29,18 +29,18 @@
 (defclass repository ()
   ((name :type string
 	 :initarg :name)
-   (dir :type pathname
-	:initarg :dir)))
+   (url :type pathname
+	:initarg :url)))
 
 (defvar *repository-types*
   (make-hash-table :test 'equal)
   "Hash table mapping each repo-type string to a repository class name")
 
-(defun make-repository (type name dir &rest initargs)
+(defun make-repository (type name url &rest initargs)
   (let ((class (gethash type *repository-types*)))
     (unless class
       (error "Unknown repository type ~S" type))
-    (apply 'make-instance class :name name :dir dir initargs)))
+    (apply 'make-instance class :name name :url url initargs)))
 
 (defgeneric repository.export (repository target-dir &optional revision))
 

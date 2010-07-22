@@ -26,15 +26,30 @@
 
 (in-package :cl-ci)
 
-(defun read-auth (&optional (auth-file *auth-file*))
+(defmacro define-file-reader (name (file-var file-default) &body body)
+  (let ((cache (gensym "CACHE-"))
+	(cache-time (gensym "CACHE-TIME-"))
+	(wtime (gensym "WTIME-")))
+    `(let ((,cache nil)
+	   (,cache-time 0))
+       (defun ,name (&optional (,file-var ,file-default))
+	 (let ((,wtime (file-write-date ,file-var)))
+	   (if (< ,wtime ,cache-time)
+	       ,cache
+	       (setf ,cache-time ,wtime
+		     ,cache (let ((*read-eval* nil))
+			      ,@body))))))))
+
+;;  Auth
+
+(define-file-reader read-auth (auth-file *auth-file*)
   (let ((auth (make-hash-table :test 'equal)))
     (with-open-file (stream auth-file)
-      (let ((*read-eval* nil))
-	(loop
-	   for exp = (read stream nil :eof)
-	   while (not (eq :eof exp))
-	   do (destructuring-bind (login pass &rest plist) exp
-		(setf (gethash (cons login pass) auth) plist)))))
+      (loop
+	 for exp = (read stream nil :eof)
+	 while (not (eq :eof exp))
+	 do (destructuring-bind (login pass &rest plist) exp
+	      (setf (gethash (cons login pass) auth) plist))))
     auth))
 
 (defun write-auth (auth &optional (auth-file *auth-file*))
@@ -78,3 +93,18 @@
       (when kind
 	(unless (eq kind (getf plist :kind))
 	  (return-http 403))))))
+
+;;  Notify
+
+(define-file-reader read-notify (path *notify-file*)
+  (let (notify)
+    (with-open-file (stream path)
+      (loop
+	 for exp = (read stream nil :eof)
+	 while (not (eq :eof exp))
+	 do (destructuring-bind (events &rest actions) exp
+	      (dolist (event events)
+		(dolist (action actions)
+		  (pushnew action (getf notify event)
+			   :test #'tree-equal))))))
+    notify))
