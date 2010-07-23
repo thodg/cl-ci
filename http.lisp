@@ -76,20 +76,26 @@
 	    date (nth (1- month) hunchentoot-dir-lister::*months*)
 	    year hour minute second)))
 
-(defun list-directory-html (dir uri-path
-                            &key (show-hidden-files nil)
-                            (exclude-prefixes '("." "#"))
-                            (exclude-suffixes '("~"))
-			    uri-prefix)
-                            ;(style *default-style*)
-                            ;style-link
-                            ;javascript-link
-                            ;on-load)
+(defun url-parts (url)
+  (loop
+     with path = ()
+     for part in (cl-ppcre:split "/" url)
+     do (push part path)
+     unless (zerop (length part))
+     collect (list :name part
+		   :url (format nil "~{~A~^/~}"
+				(reverse path)))))
+
+(defun list-directory (dir uri-path
+		       &key (show-hidden-files nil)
+		       (exclude-prefixes '("." "#"))
+		       (exclude-suffixes '("~"))
+		       uri-prefix)
   (let ((uri (format nil "~A~A" uri-prefix uri-path)))
     (render-parts
      uri
      (list #P"file-list.xhtml"
-	   :url uri
+	   :parent-url ".."
 	   :files (sort
 		   (mapcar
 		    #'(lambda (path)
@@ -108,26 +114,30 @@
 		   #'> :key #'(lambda (f)
 				(getf f :wtime 0)))))))
 
-(defmacro define-files-dispatchers (dir &key index type)
+(defmacro define-files-dispatcher (dir &key index type)
   (let* ((dir-string (string-downcase (symbol-name dir)))
-	 (uri-prefix (format nil "/~A/" dir-string))
+	 (uri-prefix (format nil "/cl-ci/~A/" dir-string))
 	 (base-path (concatenate 'string "files/" dir-string "/"))
 	 (dispatch-sym (intern (format nil "DISPATCH-~A" dir))))
-    (setf (symbol-function dispatch-sym)
-	  (if index
-	      (hunchentoot-dir-lister:create-directory-listing-dispatcher
-	       uri-prefix base-path 'list-directory-html
-	       :uri-prefix (format nil "/~A" dir-string))
-	      (hunchentoot:create-folder-dispatcher-and-handler
-	       uri-prefix base-path type)))
-    `',dispatch-sym))
+    `(eval-when (:compile-toplevel :execute)
+       (setf (symbol-function ',dispatch-sym)
+	     ,(if index
+		  (hunchentoot-dir-lister:create-directory-listing-dispatcher
+		   uri-prefix "files" 'list-directory
+		   :uri-prefix "/cl-ci")
+		  (hunchentoot:create-folder-dispatcher-and-handler
+		   uri-prefix base-path type)))
+       ',dispatch-sym)))
 
-(define-files-dispatchers css :type "text/css")
-(define-files-dispatchers img :type "image/png")
-(define-files-dispatchers js  :type "text/javascript")
-(define-files-dispatchers reports :index t :type "text/html")
+(define-files-dispatcher css :type "text/css")
+(define-files-dispatcher img :type "image/png")
+(define-files-dispatcher js  :type "text/javascript")
+(define-files-dispatcher reports :index t :type "text/html")
 
-(hunchentoot:define-easy-handler (home :uri "/") ()
+(hunchentoot:define-easy-handler (root :uri "/") ()
+  (hunchentoot:redirect "/cl-ci/"))
+
+(hunchentoot:define-easy-handler (home :uri "/cl-ci/") ()
   (render-parts nil `(#P"home.xhtml"
 			:intro "Welcome to CL-CI")))
 

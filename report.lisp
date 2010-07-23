@@ -95,7 +95,7 @@
 	(mapcar #'notify-action (getf conf event))
 	(mapcar #'notify-action (getf conf t))))))
 
-(define-hook update (repository key old-rev new-rev repo-type repo-dir)
+(define-hook git-update (repository key old-rev new-rev repo-type repo-dir)
   (check-type repository string)
   (check-type key string)
   (check-type old-rev string)
@@ -122,9 +122,12 @@ Checking update of repository ~S
     (hunchentoot:redirect (slot-value report 'uri))))
 
 (defun report-title (report)
-  (with-slots (event repository revision try) report
+  (with-slots (event repository result revision try) report
     (with-slots (name) repository
-      (format nil "~A of ~A to revision ~A (try ~3,'0d)"
+      (format nil "~A: ~A of ~A to revision ~A (try ~3,'0d)"
+	      (if result
+		  (string-capitalize (symbol-name result))
+		  "Unknown result")
 	      (string-capitalize (symbol-name event))
 	      name revision try))))
 
