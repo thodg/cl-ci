@@ -1,8 +1,16 @@
 h1,h2,h3,h4 {
-    font-family:sans-serif, helvetica, arial;
+}
+a,a:active,a:hover,a:link,a:visited {
+    text-decoration:none;
 }
 a {
-    text-decoration:none;
+    color:#445;
+}
+a:visited {
+    color:#446;
+}
+a:hover {
+    color:#55a;
 }
 .files table {
     text-align:left;
